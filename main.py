@@ -1,7 +1,8 @@
 from pathlib import Path
+
+from Deleter import Deleter, FileSizeComparator
 from FolderScanner import FolderScanner
 from Logger import ThreadSafeLogger
-
 from Processer import IProcesser, BaseProcessResult
 
 
@@ -66,10 +67,15 @@ class SuffixProcesser(IProcesser):
 
 def main():
     logger = ThreadSafeLogger()
-    with FolderScanner("test", logger, processer=SuffixProcesser()) as folder:
+    with FolderScanner(r"\\server1.sagumesweet.com\aria2", logger, processer=GroupByIdProcesser()) as scanner:
         # 扫描文件夹并获取结果
-        result = folder.scan()
-    result.convert_to_json_file()
+        result = scanner.scan()
+        # 将结果转换为 JSON 文件
+        scanner.convert_to_json_file()
+    file_size_comparator: FileSizeComparator = FileSizeComparator(logger)
+    deleter = Deleter(result.data, file_size_comparator, logger)
+    deleter.if_exists().delete_by_id()
     print(len(result.data))
+
 
 main()

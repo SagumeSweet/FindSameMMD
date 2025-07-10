@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Callable
-import json
 
 
 class BaseProcessResult(ABC):
@@ -41,15 +40,6 @@ class BaseProcessResult(ABC):
             self._iadd(other)
             return self
         raise TypeError(self._calculation_error_str(other))
-
-    def convert_to_json_file(self) -> None:
-        """将处理结果转换为 JSON 文件"""
-        file_path = Path(f"{self.__class__.__name__}_result.json")
-
-        with file_path.open("w", encoding="utf-8") as f:
-            json.dump(self.data, f, ensure_ascii=False, indent=4)
-
-
 
 class ProcessResult(BaseProcessResult):
     def __init__(self, data):

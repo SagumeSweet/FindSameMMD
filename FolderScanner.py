@@ -1,3 +1,4 @@
+import json
 from concurrent.futures import ThreadPoolExecutor, Future
 from pathlib import Path
 from queue import Queue
@@ -23,7 +24,7 @@ class FolderScanner:
         self._executor.shutdown(wait=True)
 
     @property
-    def _result(self) -> BaseProcessResult:
+    def result(self) -> BaseProcessResult:
         """获取结果"""
         results: BaseProcessResult = self._processer.empty_process_result
         while not self._results_queue.empty():
@@ -43,7 +44,7 @@ class FolderScanner:
         """启动扫描并返回所有文件路径的列表"""
         self._submit_thread(self._scan_folder, self._root_path)
         self._futures.join()
-        return self._result
+        return self.result
 
     def _scan_folder(self, folder_path: Path) -> None:
         """递归扫描单个文件夹，返回该文件夹及子文件夹下的所有文件路径"""
@@ -53,6 +54,13 @@ class FolderScanner:
                 self._submit_thread(self._scan_folder, entry)
             elif entry.is_file():
                 self._results_queue.put(self._processer.process(entry))
+
+    def convert_to_json_file(self) -> None:
+        """将处理结果转换为 JSON 文件"""
+        file_path = Path(f"{self._processer.__class__.__name__}_result.json")
+        with file_path.open("w", encoding="utf-8") as f:
+            json.dump(self.result.data, f, ensure_ascii=False, indent=4)
+
 
     def shutdown(self) -> None:
         self._executor.shutdown(wait=True)

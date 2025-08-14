@@ -4,11 +4,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from Logger import ThreadSafeLogger, Logger
-
 
 class FileSizeComparator:
-    def __init__(self, logger: ThreadSafeLogger, max_workers: int = 10):
+    def __init__(self, logger, max_workers: int = 10):
         self._file_list: list[str] = []
         self._max_workers = max_workers
         self._size_map: dict[int, list[tuple[str, float]]] = defaultdict(list)
@@ -49,16 +47,16 @@ class FileSizeComparator:
 
 
 class Deleter:
-    def __init__(self, data: dict[str, list[str]], fileSizeComparator: FileSizeComparator, logger: Logger, retry_count: int = 5):
+    def __init__(self, data: dict[str, list[str]], fileSizeComparator: FileSizeComparator, logger, retry_count: int = 5):
         self._data: dict[str, list[str]] = data
-        self._if_exists: bool = False
+        self._do_delete: bool = False
         self._retry_count: int = retry_count
         self._fileSizeComparator: FileSizeComparator = fileSizeComparator
-        self._logger: Logger = logger
+        self._logger = logger
 
-    def if_exists(self) -> "Deleter":
+    def do_delete(self) -> "Deleter":
         """是否在删除前检查文件是否存在"""
-        self._if_exists = True
+        self._do_delete = True
         return self
 
     def _find_same_by_id(self) -> dict[str, list[str]]:
@@ -75,8 +73,8 @@ class Deleter:
         如果没有找到相同ID的条目，则不执行任何操作。
         """
         try:
-            if self._if_exists:
-                if path.exists() and path.is_file():
+            if self._do_delete:
+                if path.is_file():
                     self._logger.info("Deleting file: %s", str(path))
                     path.unlink()
             else:
@@ -106,23 +104,25 @@ class Deleter:
         same_size_entries = self._fileSizeComparator.compare()
         for size, files in same_size_entries.items():
             # 保留最新的一个
-            self._logger.info(f"保留大小为 {size} 的最新文件: {files[0]}")
-            self._logger.info("Deleting file: %s", files[1:])
+            self._logger.debug(f"保留大小为 {size} 的最新文件: {files[0]}")
+            self._logger.info("删除多个大小相同文件: %s", files[1:])
             to_delete = files[1:]
             for path in to_delete:
-                if self._if_exists:
-                    self._try_to_delete(path=Path(path))
-        self._if_exists = False
+                self._try_to_delete(path=Path(path))
+        self._logger.info("文件大小删除处理完成")
 
     def _delete_by_date(self, paths: list[str]) -> None:
         """
         根据文件修改时间删除具有相同修改时间的条目，保留最新的一个。
         字典包含修改时间和路径。
         """
-        self._logger.debug("通过上传时间删除视频")
         same_date_entries: dict[str, list[Path]] = defaultdict(list)
         for path in paths:
             p: Path = Path(path)
+            if p.suffix.lower() == ".aria2":
+                self._logger.info(f"删除 aria2 文件: {p}")
+                self._try_to_delete(path=p)
+                continue
             date: str = p.parent.name
             same_date_entries[date].append(p)
         latest_date_str = max(same_date_entries.keys(), key=lambda d: datetime.strptime(d, '%Y-%m-%d'))
@@ -133,11 +133,10 @@ class Deleter:
                     for p in ps:
                         self._logger.info(f"删除日期为 {date_str} 的文件: {p}")
                         self._try_to_delete(path=p)
-        else:
-            self._logger.debug(f"没有其他日期，保留最新的日期 {latest_date_str} 的文件")
         if len(same_date_entries[latest_date_str]) > 1:
-            self._logger.info(f"最新日期 {latest_date_str} 的文件包含多个值： {same_date_entries[latest_date_str]}")
+            self._logger.info(f"最新日期 {latest_date_str} 的文件包含多个值，开始判断文件大小")
             self._delete_by_size(same_date_entries[latest_date_str])
+        self._logger.info("日期删除处理完成")
 
     def delete_by_id(self):
         """
@@ -147,7 +146,7 @@ class Deleter:
         same_id_entries = self._find_same_by_id()
         for video_id, paths in same_id_entries.items():
             # 保留最新的一个
-            self._logger.debug(f"处理 ID {video_id} 的条目，判断文件日期")
+            self._logger.info(f"ID为 {video_id} 的文件包含多个值，开始判断文件日期")
             self._delete_by_date(paths)
-
-        self._if_exists = False
+            self._logger.info(f"ID为 {video_id} 的文件处理完成")
+        self._do_delete = False

@@ -2,6 +2,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
+from time import sleep
 from typing import Optional
 
 
@@ -87,6 +88,7 @@ class Deleter:
         except PermissionError:
             if count < self._retry_count:
                 self._logger.warning(f"Permission denied for {path}, retrying ({count}/{self._retry_count})...")
+                sleep(3)
                 self._try_to_delete(path, count + 1)
             else:
                 self._logger.error(f"Failed to delete {path} after {self._retry_count} attempts.")

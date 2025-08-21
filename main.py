@@ -1,4 +1,5 @@
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from FileScanner import IProcesser, BaseProcessResult, FolderScanner
@@ -48,17 +49,16 @@ class GroupByIdProcesser(IProcesser):
 
 def main(if_test: bool = True):
     logger = ThreadSafeLogger()
-    with FolderScanner(r"\\server1.sagumesweet.com\aria2", logger, processer=GroupByIdProcesser()) as scanner:
-        # 扫描文件夹并获取结果
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        scanner = FolderScanner(r"\\server1.sagumesweet.com\aria2", executor, logger, processer=GroupByIdProcesser())
         result = scanner.scan()
-        # 将结果转换为 JSON 文件
         scanner.convert_to_json_file()
-    file_size_comparator: FileSizeComparator = FileSizeComparator(logger)
-    deleter = Deleter(result.data, file_size_comparator, logger)
-    if if_test:
-        deleter.delete_by_id()
-    else:
-        deleter.do_delete().delete_by_id()
+        file_size_comparator: FileSizeComparator = FileSizeComparator(logger, executor)
+        deleter = Deleter(result.data, file_size_comparator, logger)
+        if if_test:
+            deleter.delete_by_id()
+        else:
+            deleter.do_delete().delete_by_id()
     print(len(result.data))
 
 

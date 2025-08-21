@@ -7,9 +7,9 @@ from typing import Optional
 
 
 class FileSizeComparator:
-    def __init__(self, logger, max_workers: int = 10):
+    def __init__(self, logger, executor):
         self._file_list: list[str] = []
-        self._max_workers = max_workers
+        self._executor: ThreadPoolExecutor = executor
         self._size_map: dict[int, list[tuple[str, float]]] = defaultdict(list)
         self._logger = logger
 
@@ -37,13 +37,12 @@ class FileSizeComparator:
     def compare(self) -> dict[str, list[str]]:
         """比较文件大小，返回大小相同的文件集合（文件大小作为字符串键）"""
         self._logger.info("开始比较文件大小")
-        with ThreadPoolExecutor(max_workers=self._max_workers) as executor:
-            for result in executor.map(self._get_size, self._file_list):
-                if result is None:
-                    continue
-                size, time, file = result
-                self._size_map[size].append((file, time))
-                self._size_map[size].sort(key=lambda x: x[1], reverse=True)
+        for result in self._executor.map(self._get_size, self._file_list):
+            if result is None:
+                continue
+            size, time, file = result
+            self._size_map[size].append((file, time))
+            self._size_map[size].sort(key=lambda x: x[1], reverse=True)
         return {str(size): [file[0] for file in files] for size, files in self._size_map.items() if len(files) > 1}
 
 
